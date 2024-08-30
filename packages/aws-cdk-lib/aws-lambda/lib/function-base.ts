@@ -488,7 +488,13 @@ export abstract class FunctionBase extends Resource implements IFunction, ec2.IC
    * Grant the given identity permissions to invoke this Lambda Function URL
    */
   public grantInvokeUrl(grantee: iam.IGrantable): iam.Grant {
-    const identifier = `InvokeFunctionUrl${grantee.grantPrincipal}`; // calls the .toString() of the principal
+    const hash = createHash('sha256')
+      .update(JSON.stringify({
+        principal: grantee.grantPrincipal.toString(),
+        conditions: grantee.grantPrincipal.policyFragment.conditions,
+      }), 'utf8')
+      .digest('base64');
+    const identifier = `InvokeFunctionUrl${hash}`;
 
     // Memoize the result so subsequent grantInvoke() calls are idempotent
     let grant = this._functionUrlInvocationGrants[identifier];

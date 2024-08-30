@@ -3424,6 +3424,40 @@ describe('function', () => {
       });
     });
 
+    test('grant invoke URL permissions with ArnPrincipal from other Lambda', () => {
+      const stack = new cdk.Stack();
+      const lambdaThatWillGrant = new lambda.Function(stack, 'someLambda', {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'handler',
+        code: lambda.Code.fromInline('def handler(context):\n\treturn "hi"'),
+      });
+      lambdaThatWillGrant.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+      // This lambda function will have permissions to use the above resources
+      const lambdaThatWillInvoke = new lambda.Function(stack, 'grantee', {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'handler',
+        code: lambda.Code.fromInline('def handler(context):\n\treturn "hi, pretend I am invoking the other lambda or reading form S3"'),
+      });
+      lambdaThatWillInvoke.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+
+      // Now we grant permissions.
+      const arnPrincipal = new iam.ArnPrincipal(lambdaThatWillInvoke.functionArn);
+      // Below line does not work. Synth error: " Resolution error: ID components may not include unresolved tokens: InvokeFunctionUrlArnPrincipal(${Token[TOKEN.59]})."
+      lambdaThatWillGrant.grantInvokeUrl(arnPrincipal);
+
+      const template = Template.fromStack(stack);
+      template.hasResourceProperties('AWS::Lambda::Permission', {
+        Action: 'lambda:InvokeFunctionUrl',
+        FunctionName: {
+          'Fn::GetAtt': ['someLambdaA2987FE4', 'Arn'],
+        },
+        Principal: {
+          'Fn::GetAtt': ['granteeD59A5077', 'Arn'],
+        },
+      });
+    });
+
     test('grantInvokeUrl: adds appropriate permissions', () => {
       // GIVEN
       const stack = new cdk.Stack();
@@ -3501,13 +3535,13 @@ describe('function', () => {
       //THEN
       Template.fromStack(stack).hasResource('AWS::Lambda::Function', {
         Properties:
-            {
-              Handler: 'example.Handler::handleRequest',
-              Runtime: 'java11',
-              SnapStart: {
-                ApplyOn: 'PublishedVersions',
-              },
-            },
+        {
+          Handler: 'example.Handler::handleRequest',
+          Runtime: 'java11',
+          SnapStart: {
+            ApplyOn: 'PublishedVersions',
+          },
+        },
       });
     });
 
@@ -3536,14 +3570,14 @@ describe('function', () => {
       //THEN
       Template.fromStack(stack).hasResource('AWS::Lambda::Function', {
         Properties:
-            {
-              Handler: 'example.Handler::handleRequest',
-              Runtime: 'java11',
-              Architectures: ['arm64'],
-              SnapStart: {
-                ApplyOn: 'PublishedVersions',
-              },
-            },
+        {
+          Handler: 'example.Handler::handleRequest',
+          Runtime: 'java11',
+          Architectures: ['arm64'],
+          SnapStart: {
+            ApplyOn: 'PublishedVersions',
+          },
+        },
       });
     });
 
